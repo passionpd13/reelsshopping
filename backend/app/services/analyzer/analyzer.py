@@ -8,9 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from anthropic import Anthropic
-
-from app.core.config import get_settings
+from app.core.llm import get_llm
 from app.core.logging import get_logger
 from app.services.ingestor.stt import STTResult
 
@@ -94,19 +92,15 @@ def _build_user_message(stt: STTResult) -> str:
 
 
 def analyze_transcript(stt: STTResult) -> VideoAnalysisResult:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-
-    client = Anthropic(api_key=settings.anthropic_api_key)
+    llm = get_llm()
     system = SYSTEM_PROMPT.format(
         hook_types=", ".join(HOOK_TYPES),
         roles=", ".join(SEGMENT_ROLES),
     )
 
-    log.info("Analyzing transcript (%d segments) with %s", len(stt.segments), settings.anthropic_model)
-    resp = client.messages.create(
-        model=settings.anthropic_model,
+    log.info("Analyzing transcript (%d segments) with %s", len(stt.segments), llm.model)
+    resp = llm.client.messages.create(
+        model=llm.model,
         max_tokens=2000,
         system=system,
         messages=[{"role": "user", "content": _build_user_message(stt)}],

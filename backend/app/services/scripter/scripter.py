@@ -8,9 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-from anthropic import Anthropic
-
-from app.core.config import get_settings
+from app.core.llm import get_llm
 from app.core.logging import get_logger
 from app.services.analyzer.analyzer import SEGMENT_ROLES, VideoAnalysisResult
 
@@ -125,11 +123,7 @@ def _product_to_context(p: ProductBrief) -> str:
 
 
 def generate_script(req: ScriptRequest) -> ScriptDraft:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-
-    client = Anthropic(api_key=settings.anthropic_api_key)
+    llm = get_llm()
     system = SYSTEM_PROMPT.format(roles=SEGMENT_ROLES)
 
     user_msg = (
@@ -143,8 +137,8 @@ def generate_script(req: ScriptRequest) -> ScriptDraft:
     )
 
     log.info("Generating script for product=%s duration=%ds", req.product.name, req.target_duration_sec)
-    resp = client.messages.create(
-        model=settings.anthropic_model,
+    resp = llm.client.messages.create(
+        model=llm.model,
         max_tokens=3000,
         system=system,
         messages=[{"role": "user", "content": user_msg}],
@@ -156,8 +150,7 @@ def generate_script(req: ScriptRequest) -> ScriptDraft:
 
 def revise_script(current: ScriptDraft, instruction: str) -> ScriptDraft:
     """Apply a free-form user instruction to an existing script draft."""
-    settings = get_settings()
-    client = Anthropic(api_key=settings.anthropic_api_key)
+    llm = get_llm()
     system = SYSTEM_PROMPT.format(roles=SEGMENT_ROLES)
 
     user_msg = (
@@ -165,8 +158,8 @@ def revise_script(current: ScriptDraft, instruction: str) -> ScriptDraft:
         f"[수정 지시]\n{instruction}\n\n"
         "현재 대본을 수정 지시에 맞게 업데이트한 전체 JSON을 다시 출력하세요."
     )
-    resp = client.messages.create(
-        model=settings.anthropic_model,
+    resp = llm.client.messages.create(
+        model=llm.model,
         max_tokens=3000,
         system=system,
         messages=[{"role": "user", "content": user_msg}],
